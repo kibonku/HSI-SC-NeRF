@@ -1,0 +1,212 @@
+
+###--------------- 1. Pose Estimation (COLMAP) using psuedo RGB 
+
+#--- Apple (NC1)
+time ns-process-data images   \
+--data nerfstudio/_custom_dataset/2.pre_final/apple/pseudo_rgb_WR_mask   \
+--output-dir nerfstudio/_custom_dataset/2.pre_final/apple/pseudo_rgb_WR_mask_colmap   \
+--sfm-tool colmap   --matching-method sequential   --feature-type any   --matcher-type any   \
+--use-single-camera-mode   --same-dimensions   --no-refine-intrinsics \
+--camera-type simple_pinhole   --num-downscales 3  
+
+#--- Apple (S10)
+time ns-process-data images   \
+--data nerfstudio/_custom_dataset_application-paper/2.pre/S10/S10_t4/pseudo_rgb_WR_mask   \
+--output-dir nerfstudio/_custom_dataset_application-paper/2.pre/S10/S10_t4/pseudo_rgb_WR_mask_colmap   \
+--sfm-tool colmap   --matching-method sequential   --feature-type any   --matcher-type any   \
+--use-single-camera-mode   --same-dimensions   --no-refine-intrinsics \
+--camera-type simple_pinhole   --num-downscales 3  
+
+#--- Maize
+time ns-process-data images   \
+--data nerfstudio/_custom_dataset/2.pre_final/maize/pseudo_rgb_WR_mask   \
+--output-dir nerfstudio/_custom_dataset/2.pre_final/maize/pseudo_rgb_WR_mask_colmap   \
+--sfm-tool colmap   --matching-method sequential   --feature-type any   --matcher-type any   \
+--use-single-camera-mode   --same-dimensions   --no-refine-intrinsics \
+--camera-type simple_pinhole   --num-downscales 3  
+
+#--- Pear
+time ns-process-data images   \
+--data nerfstudio/_custom_dataset/2.pre_final/pear/pseudo_rgb_WR_mask   \
+--output-dir nerfstudio/_custom_dataset/2.pre_final/pear/pseudo_rgb_WR_mask_colmap   \
+--sfm-tool colmap   --matching-method sequential   --feature-type any   --matcher-type any   \
+--use-single-camera-mode   --same-dimensions   --no-refine-intrinsics \
+--camera-type simple_pinhole   --num-downscales 3  
+
+
+
+###--------------- 2. Train HSI (204) 
+
+#--- Apple (NC1)
+WANDB_PROJECT=Method_paper WANDB_ENTITY=kibona9-iowa-state-university \
+ns-train nerfacto  \
+    --data nerfstudio/_custom_dataset/2.pre_final/apple/204_hsi_WR_mask  \
+    --output-dir nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR_mask  \
+    --experiment-name apple_204_hsi_WR_mask \
+    --pipeline.model.num-output-channels 204  \
+    --pipeline.model.predict-normals True   \
+    --viewer.quit-on-train-completion True  \
+    --pipeline.model.far_plane=5.0  --pipeline.model.near_plane=0.01 \
+    --max-num-iterations 30000  \
+    --vis viewer+wandb 
+
+#--- Apple (S10)
+WANDB_PROJECT=Application_paper WANDB_ENTITY=kibona9-iowa-state-university \
+ns-train nerfacto  \
+    --data nerfstudio/_custom_dataset_application-paper/2.pre/S10/S10_t4/204_hsi_WR_mask  \
+    --output-dir nerfstudio/_custom_dataset_application-paper/3.train/S10/S10_t4/204_hsi_WR_mask  \
+    --experiment-name S10_t4_204_hsi_WR_mask \
+    --pipeline.model.num-output-channels 204  \
+    --pipeline.model.predict-normals True   \
+    --viewer.quit-on-train-completion True  \
+    --pipeline.model.far_plane=5.0  --pipeline.model.near_plane=0.01 \
+    --max-num-iterations 30000  \
+    --vis viewer+wandb     
+
+
+#--- Maize 
+WANDB_PROJECT=Method_paper WANDB_ENTITY=kibona9-iowa-state-university \
+ns-train nerfacto  \
+    --data nerfstudio/_custom_dataset/2.pre_final/maize/204_hsi_WR_mask  \
+    --output-dir nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask  \
+    --experiment-name maize_204_hsi_WR_mask  \
+    --pipeline.model.num-output-channels 204  \
+    --pipeline.model.predict-normals True   \
+    --viewer.quit-on-train-completion True  \
+    --pipeline.model.far_plane=5.0  --pipeline.model.near_plane=0.01 \
+    --max-num-iterations 30000  \
+    --vis viewer+wandb 
+
+
+#--- Pear 
+WANDB_PROJECT=Method_paper WANDB_ENTITY=kibona9-iowa-state-university \
+ns-train nerfacto  \
+    --data nerfstudio/_custom_dataset/2.pre_final/pear/204_hsi_WR_mask  \
+    --output-dir nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR_mask  \
+    --experiment-name pear_204_hsi_WR_mask  \
+    --pipeline.model.num-output-channels 204  \
+    --pipeline.model.predict-normals True   \
+    --viewer.quit-on-train-completion True  \
+    --pipeline.model.far_plane=5.0  --pipeline.model.near_plane=0.01 \
+    --max-num-iterations 30000  \
+    --vis viewer+wandb 
+
+
+
+###--------------- 3. Evaluation with Masks 
+
+#--- Apple (with and without masks, respectively)
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR_mask/apple_204_hsi_WR_mask/nerfacto/2025-12-10_232849/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR_mask/apple_204_hsi_WR_mask/nerfacto/2025-12-10_232849/eval_mask_hsi-loss.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR_mask/apple_204_hsi_WR_mask/nerfacto/2025-12-10_232849/render_output
+
+
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR/apple_204_hsi_WR_cam/nerfacto/2025-12-07_175930/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR/apple_204_hsi_WR_cam/nerfacto/2025-12-07_175930/eval_hsi-loss.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR/apple_204_hsi_WR_cam/nerfacto/2025-12-07_175930/render_output
+
+
+#--- Maize (with and without masks, respectively)
+#### seg_masks
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask/maize_204_hsi_WR_mask/nerfacto/2025-12-10_223030/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask/maize_204_hsi_WR_mask/nerfacto/2025-12-10_223030/eval_mask_hsi-loss.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask/maize_204_hsi_WR_mask/nerfacto/2025-12-10_223030/render_output
+
+
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask/maize_204_hsi_WR_mask/nerfacto/2025-12-10_223030/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask/maize_204_hsi_WR_mask/nerfacto/2025-12-10_223030/eval_hsi-loss.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask/maize_204_hsi_WR_mask/nerfacto/2025-12-10_223030/render_output
+
+
+
+#### masks
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR/maize_204_hsi_WR_cam/nerfacto/2025-12-07_174616/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR/maize_204_hsi_WR_cam/nerfacto/2025-12-07_174616/eval_hsi-loss_mask.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR/maize_204_hsi_WR_cam/nerfacto/2025-12-07_174616/render_output
+
+#### without masks
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR/maize_204_hsi_WR_cam/nerfacto/2025-12-07_174616/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR/maize_204_hsi_WR_cam/nerfacto/2025-12-07_174616/eval_hsi-loss.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR/maize_204_hsi_WR_cam/nerfacto/2025-12-07_174616/render_output
+
+
+
+#--- Pear (with and without masks, respectively)
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR_mask/pear_204_hsi_WR_mask/nerfacto/2025-12-10_231237/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR_mask/pear_204_hsi_WR_mask/nerfacto/2025-12-10_231237/eval_mask_hsi-loss.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR_mask/pear_204_hsi_WR_mask/nerfacto/2025-12-10_231237/render_output
+
+ns-eval \
+--load-config  nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR/pear_204_hsi_WR_cam/nerfacto/2025-12-10_223043/config.yml \
+--output-path  nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR/pear_204_hsi_WR_cam/nerfacto/2025-12-10_223043/eval_hsi-loss.json \
+--render-output-path  nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR/pear_204_hsi_WR_cam/nerfacto/2025-12-10_223043/render_output
+
+
+
+###--------------- 4. PCD HSI(204); object only; markers are not required 
+
+#--- Apple (NC1)
+time ns-export hsi-pointcloud \
+    --load-config nerfstudio/_custom_dataset/3.train_final/apple/204_hsi_WR_mask/apple_204_hsi_WR_mask/nerfacto/2025-12-10_232849/config.yml \
+    --output-dir nerfstudio/_custom_dataset/4.pcd_final//apple/204_hsi_WR_mask \
+    --num-points 1000000 \
+    --obb_center 0.0000000000 0.0000000000 -0.1415120335 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.1500000015 0.1500000015 0.1000000015
+
+#--- Apple (S10_t1); --obb_scale 0.12 0.12 0.115
+time ns-export hsi-pointcloud \
+    --load-config nerfstudio/_custom_dataset_application-paper/3.train/S10/S10_t1/204_hsi_WR_mask/S10_t1_204_hsi_WR_mask/nerfacto/2025-12-16_211806/config.yml \
+    --output-dir nerfstudio/_custom_dataset_application-paper/4.pcd/S10/S10_t1/204_hsi_WR_mask \
+    --num-points 1000000 \
+    --obb_center 0.03011965 0.01236190 -0.15514728 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.05183344 0.05570095 0.04138672
+
+
+    --obb_center 0.0000000000 0.0000000000 -0.1115120335 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.5 0.5 0.5
+
+#--- Apple (S10_t2); --obb_scale 0.12 0.12 0.13
+time ns-export hsi-pointcloud \
+    --load-config nerfstudio/_custom_dataset_application-paper/3.train/S10/S10_t2/204_hsi_WR_mask/S10_t2_204_hsi_WR_mask/nerfacto/2025-12-16_214911/config.yml \
+    --output-dir nerfstudio/_custom_dataset_application-paper/4.pcd/S10/S10_t2/204_hsi_WR_mask \
+    --num-points 1000000 \
+    --obb_center 0.0000000000 0.0000000000 -0.1115120335 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.5 0.5 0.5
+
+#--- Apple (S10_t3); --obb_scale 0.12 0.12 0.135 
+time ns-export hsi-pointcloud \
+    --load-config  nerfstudio/_custom_dataset_application-paper/3.train/S10/S10_t3/204_hsi_WR_mask/S10_t3_204_hsi_WR_mask/nerfacto/2025-12-16_221600/config.yml\
+    --output-dir nerfstudio/_custom_dataset_application-paper/4.pcd/S10/S10_t3/204_hsi_WR_mask \
+    --num-points 1000000 \
+    --obb_center 0.0000000000 0.0000000000 -0.1115120335 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.5 0.5 0.5       
+
+#--- Apple (S10_t4);--obb_scale 0.12 0.12 0.12  
+time ns-export hsi-pointcloud \
+    --load-config nerfstudio/_custom_dataset_application-paper/3.train/S10/S10_t4/204_hsi_WR_mask/S10_t4_204_hsi_WR_mask/nerfacto/2025-12-16_222621/config.yml \
+    --output-dir nerfstudio/_custom_dataset_application-paper/4.pcd/S10/S10_t4/204_hsi_WR_mask \
+    --num-points 1000000 \
+    --obb_center 0.0000000000 0.0000000000 -0.1115120335 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.5 0.5 0.5       
+
+
+
+#--- Maize
+ns-export hsi-pointcloud \
+    --load-config nerfstudio/_custom_dataset/3.train_final/maize/204_hsi_WR_mask/maize_204_hsi_WR_mask/nerfacto/2025-12-10_223030/config.yml \
+    --output-dir nerfstudio/_custom_dataset/4.pcd_final/maize/204_hsi_WR_mask \
+    --num-points 1000000 \
+    --save-world-frame False \
+    --obb_center 0.0000000000 0.0000000000 -0.0759587798 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.1500000060 0.1500000060 0.110000060
+
+
+#--- Pear
+ns-export hsi-pointcloud \
+    --load-config nerfstudio/_custom_dataset/3.train_final/pear/204_hsi_WR_mask/pear_204_hsi_WR_mask/nerfacto/2025-12-10_231237/config.yml \
+    --output-dir nerfstudio/_custom_dataset/4.pcd_final/pear/204_hsi_WR_mask \
+    --num-points 1000000 \
+    --save-world-frame False \
+    --obb_center 0.0000000000 0.0000000000 -0.0959587798 --obb_rotation 0.0000000000 0.0000000000 0.0000000000 --obb_scale 0.1500000060 0.1500000060 0.1500000060
+
+

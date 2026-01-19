@@ -39,7 +39,7 @@ from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager
 from nerfstudio.data.datamanagers.parallel_datamanager import ParallelDataManager
 from nerfstudio.data.scene_box import OrientedBox
 from nerfstudio.exporter import texture_utils, tsdf_utils
-from nerfstudio.exporter.exporter_utils import collect_camera_poses, generate_point_cloud, get_mesh_from_filename, generate_hsi_point_cloud
+from nerfstudio.exporter.exporter_utils import collect_camera_poses, generate_point_cloud, get_mesh_from_filename
 from nerfstudio.exporter.marching_cubes import generate_mesh_with_multires_marching_cubes
 from nerfstudio.fields.sdf_field import SDFField  # noqa
 from nerfstudio.models.splatfacto import SplatfactoModel
@@ -649,132 +649,6 @@ class ExportGaussianSplat(Exporter):
         ExportGaussianSplat.write_ply(str(filename), count, map_to_tensors)
 
 
-@dataclass
-class ExportHSIPointCloud(Exporter):
-    """Export hyperspectral NeRF as a point cloud with bands (x,y,z,b1..bC) and optional normals."""
-
-    num_points: int = 1000000
-    """Number of points to generate."""
-    depth_output_name: str = "depth"
-    """Name of the depth output."""
-    hsi_output_name: str = "rgb"
-    """Name of the HSI output (e.g., 'rgb' which is actually 10 channels)."""
-    
-    normal_output_name: Optional[str] = "normals"
-    """Name of the normal output (e.g., 'normals'). Set to None to disable."""
-
-    remove_outliers: bool = True
-    """Remove outliers from the point cloud (statistical)."""
-    std_ratio: float = 10.0
-    """STD ratio used in statistical outlier removal."""
-
-    num_rays_per_batch: int = 32768
-    """Number of rays per batch."""
-    obb_center: Optional[Tuple[float, float, float]] = None
-    obb_rotation: Optional[Tuple[float, float, float]] = None
-    obb_scale: Optional[Tuple[float, float, float]] = None
-    save_world_frame: bool = False
-    """Transform back to original world frame."""
-
-    def main(self) -> None:
-        """Export HSI point cloud as PLY with (x,y,z, [nx,ny,nz], b1..bC)."""
-
-        if not self.output_dir.exists():
-            self.output_dir.mkdir(parents=True)
-
-        _, pipeline, _, _ = eval_setup(self.load_config)
-
-        # Increase batchsize to speed up eval
-        assert isinstance(
-            pipeline.datamanager,
-            (VanillaDataManager, ParallelDataManager),
-        )
-        if isinstance(pipeline.datamanager, VanillaDataManager):
-            assert pipeline.datamanager.train_pixel_sampler is not None
-            pipeline.datamanager.train_pixel_sampler.num_rays_per_batch = self.num_rays_per_batch
-
-        crop_obb = None
-        if self.obb_center is not None and self.obb_rotation is not None and self.obb_scale is not None:
-            crop_obb = OrientedBox.from_params(self.obb_center, self.obb_rotation, self.obb_scale)
-
-        # 1) HSI 포인트 + 밴드 + 노멀 생성
-        points, bands, normals = generate_hsi_point_cloud(
-            pipeline=pipeline,
-            num_points=self.num_points,
-            hsi_output_name=self.hsi_output_name,
-            depth_output_name=self.depth_output_name,
-            normal_output_name=self.normal_output_name,
-            crop_obb=crop_obb,
-        )
-
-        # 2) outlier 제거 (옵션)
-        if self.remove_outliers:
-            import open3d as o3d
-
-            pts_np = points.cpu().numpy().astype(np.float64)
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(pts_np)
-
-            CONSOLE.print("Cleaning HSI Point Cloud")
-            pcd, ind = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=self.std_ratio)
-            ind = np.asarray(ind, dtype=np.int64)
-            print("\033[A\033[A")
-            CONSOLE.print("[bold green]:white_check_mark: Cleaning HSI Point Cloud")
-
-            points = points[ind]
-            bands = bands[ind]
-            if normals is not None:
-                normals = normals[ind]
-
-        # 3) world frame으로 되돌리기 (옵션)
-        if self.save_world_frame:
-            pts_np = points.cpu().numpy()
-            poses = np.eye(4, dtype=np.float32)[None, ...].repeat(pts_np.shape[0], axis=0)[:, :3, :]
-            poses[:, :3, 3] = pts_np
-            poses = pipeline.datamanager.train_dataparser_outputs.transform_poses_to_original_space(
-                torch.from_numpy(poses)
-            )
-            pts_np = poses[:, :3, 3].numpy()
-            points = torch.from_numpy(pts_np)
-
-        # 4) PLY로 저장 (x,y,z, [nx,ny,nz], b1..bC)
-        pts_np = points.cpu().numpy()
-        bands_np = bands.cpu().numpy()
-        N, C = bands_np.shape
-
-        has_normals = normals is not None
-        if has_normals:
-            normals_np = normals.cpu().numpy()
-
-        dtype_list = [("x", "f4"), ("y", "f4"), ("z", "f4")]
-        if has_normals:
-            dtype_list.extend(
-                [("nx", "f4"), ("ny", "f4"), ("nz", "f4")]
-            )
-        for i in range(C):
-            dtype_list.append((f"b{i+1}", "f4"))
-
-        vertex = np.empty(N, dtype=dtype_list)
-        vertex["x"] = pts_np[:, 0]
-        vertex["y"] = pts_np[:, 1]
-        vertex["z"] = pts_np[:, 2]
-
-        if has_normals:
-            vertex["nx"] = normals_np[:, 0]
-            vertex["ny"] = normals_np[:, 1]
-            vertex["nz"] = normals_np[:, 2]
-
-        for i in range(C):
-            vertex[f"b{i+1}"] = bands_np[:, i]
-
-        from plyfile import PlyData, PlyElement
-
-        ply = PlyData([PlyElement.describe(vertex, "vertex")], text=False)
-        out_path = self.output_dir / "point_cloud_hsi.ply"
-        ply.write(str(out_path))
-        CONSOLE.print(f"[bold green]:white_check_mark: Saved HSI point cloud to {out_path}")
-
-
 Commands = tyro.conf.FlagConversionOff[
     Union[
         Annotated[ExportPointCloud, tyro.conf.subcommand(name="pointcloud")],
@@ -783,7 +657,6 @@ Commands = tyro.conf.FlagConversionOff[
         Annotated[ExportMarchingCubesMesh, tyro.conf.subcommand(name="marching-cubes")],
         Annotated[ExportCameraPoses, tyro.conf.subcommand(name="cameras")],
         Annotated[ExportGaussianSplat, tyro.conf.subcommand(name="gaussian-splat")],
-        Annotated[ExportHSIPointCloud, tyro.conf.subcommand(name="hsi-pointcloud")],
     ]
 ]
 

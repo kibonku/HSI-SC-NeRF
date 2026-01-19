@@ -47,6 +47,7 @@ from nerfstudio.model_components.shaders import NormalsShader
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils import colormaps
 
+
 @dataclass
 class NerfactoModelConfig(ModelConfig):
     """Nerfacto Model Config"""
@@ -129,13 +130,6 @@ class NerfactoModelConfig(ModelConfig):
     """Average initial density output from MLP. """
     camera_optimizer: CameraOptimizerConfig = field(default_factory=lambda: CameraOptimizerConfig(mode="SO3xR3"))
     """Config of the camera optimizer to use"""
-    
-    # [CHANGE 1] Add config option to NerfactoModelConfig class
-    # Look for the class definition and add the new field at the end of the list
-    
-    # <--- [INSERT THIS]
-    num_output_channels: int = 204
-    """Number of output channels (RGB=3, HSI=10, etc)."""
 
 
 class NerfactoModel(Model):
@@ -176,10 +170,6 @@ class NerfactoModel(Model):
             appearance_embedding_dim=appearance_embedding_dim,
             average_init_density=self.config.average_init_density,
             implementation=self.config.implementation,
-            
-            # [CHANGE 2] Pass config value to Field in populate_modules
-            # In 'NerfactoModel' class -> 'populate_modules' method:
-            num_output_channels=self.config.num_output_channels,   # <--- [CHANGED] Use config value
         )
 
         self.camera_optimizer: CameraOptimizer = self.config.camera_optimizer.setup(
@@ -318,9 +308,6 @@ class NerfactoModel(Model):
         weights = ray_samples.get_weights(field_outputs[FieldHeadNames.DENSITY])
         weights_list.append(weights)
         ray_samples_list.append(ray_samples)
-        
-        # Check
-        # print(">> field_outputs[RGB].shape =", field_outputs[FieldHeadNames.RGB].shape)  # 10-band NeRF → [num_rays, num_samples, 10]
 
         rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
         with torch.no_grad():
@@ -376,38 +363,13 @@ class NerfactoModel(Model):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = {}
         image = batch["image"].to(self.device)
-        
-        # --------------Check
-        # print(">> GT image shape:", image.shape)
-        # print(">> Pred image shape:", outputs["rgb"].shape)
-        # --------------Check
-    
         pred_rgb, gt_rgb = self.renderer_rgb.blend_background_for_loss_computation(
             pred_image=outputs["rgb"],
             pred_accumulation=outputs["accumulation"],
             gt_image=image,
         )
-        
-        
-        # ============================
-        # [CHANGE] MASK-BASED HSI LOSS
-        # ============================
-        # loss_dict["rgb_loss"] = self.rgb_loss(gt_rgb, pred_rgb)
-        # loss_dict["hsi_loss"] = self.rgb_loss(gt_rgb, pred_rgb)
-        
-        if "mask" in batch:
-            obj_mask = batch["mask"].to(self.device).bool()[..., 0]   # [H, W]
-        else:
-            # fallback: use accumulation map as weak mask
-            obj_mask = (outputs["accumulation"][..., 0] > 0.01)
-        
-        # mask shape을 loss용 tensor shape과 동일하게 맞춰야 함
-        obj_mask_expanded = obj_mask.unsqueeze(-1).expand_as(gt_rgb)  # [H, W, C]
 
-        loss_dict["hsi_loss"] = self.rgb_loss(gt_rgb[obj_mask_expanded], pred_rgb[obj_mask_expanded])
-        # ============================
-        
-        
+        loss_dict["rgb_loss"] = self.rgb_loss(gt_rgb, pred_rgb)
         if self.training:
             loss_dict["interlevel_loss"] = self.config.interlevel_loss_mult * interlevel_loss(
                 outputs["weights_list"], outputs["ray_samples_list"]
@@ -428,87 +390,11 @@ class NerfactoModel(Model):
             self.camera_optimizer.get_loss_dict(loss_dict)
         return loss_dict
 
-
     def get_image_metrics_and_images(
         self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
     ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
-        # ================================
-        # [CHANGE 1] N-band 스펙트럴 메트릭 (SAM, RMSE)
-        # ================================
-        gt_spec = batch["image"].to(self.device)   # [H, W, N]
-        pred_spec = outputs["rgb"]                 # [H, W, N]
-
-        # foreground mask (배경 제외하고 싶으면 권장)
-        acc_map = outputs["accumulation"]          # [H, W, 1]
-        fg_mask = acc_map[..., 0] > 0.01           # [H, W]
-        # ================================
-        
-        # ================================
-        # [CHANGE 3-1] Mask only Evalution
-        # ================================
-        # 만약 transforms.json + dataparser에서 object mask를 넘겨주면 그걸 우선 사용
-        # batch["mask"] : [H, W, 1] or [H, W]
-        print("mask in batch?", "mask" in batch)  # (debuging)
-        if "mask" in batch:
-            obj_mask = batch["mask"].to(self.device)
-            if obj_mask.ndim == 3:
-                obj_mask = obj_mask[..., 0]        # [H, W]
-            obj_mask = obj_mask > 0.5              # binary
-        else:
-            obj_mask = fg_mask                     # object mask 없으면 기존 방식 사용
-        # ================================
-
-        eps = 1e-8
-
-        # --- SAM (Spectral Angle Mapper) ---
-        dot = (gt_spec * pred_spec).sum(dim=-1)        # [H, W]
-        norm_gt = torch.linalg.norm(gt_spec, dim=-1)   # [H, W]
-        norm_pred = torch.linalg.norm(pred_spec, dim=-1)
-
-        cos_theta = dot / (norm_gt * norm_pred + eps)
-        cos_theta = torch.clamp(cos_theta, -1.0 + eps, 1.0 - eps)
-        sam_map = torch.acos(cos_theta)                # [H, W], radians
-
-        sam_mean_rad = sam_map[fg_mask].mean().item()
-        sam_mean_deg = sam_mean_rad * 180.0 / np.pi
-
-        # --- Spectral RMSE (per-pixel, over N bands) ---
-        spec_diff = gt_spec - pred_spec                # [H, W, N]
-        spec_mse = (spec_diff ** 2).mean(dim=-1)       # [H, W]
-        spec_rmse_map = torch.sqrt(spec_mse + eps)     # [H, W]
-
-        rmse_mean = spec_rmse_map[fg_mask].mean().item()
-
-        # ================================
-        # [CHANGE 2] 여기서부터는 pseudo-RGB (3채널)로 줄여서
-        #     PSNR / SSIM / LPIPS + 시각화
-        # ================================
-        gt_rgb = gt_spec.clone()
-        predicted_rgb = pred_spec.clone()
-
-        if gt_rgb.shape[-1] > 3:
-            C = gt_rgb.shape[-1]
-            BASE_NUM_BANDS = 204  # 이건 pseudo-RGB 인덱스 찾을 때만 사용
-
-            band_indices = torch.linspace(
-                0, BASE_NUM_BANDS - 1,
-                steps=C,
-                device=gt_rgb.device,
-                dtype=torch.float32,
-            )
-
-            target_indices = torch.tensor(
-                [70.0, 53.0, 19.0],   # SPECIM default RGB band indices (R,G,B) in 0..203
-                device=gt_rgb.device,
-                dtype=torch.float32,
-            )
-
-            diff = torch.abs(target_indices[:, None] - band_indices[None, :])  # [3, C]
-            best_channel_idx = torch.argmin(diff, dim=1)                        # [3]
-
-            gt_rgb = gt_rgb[..., best_channel_idx]           # [..., 3]
-            predicted_rgb = predicted_rgb[..., best_channel_idx]
-
+        gt_rgb = batch["image"].to(self.device)
+        predicted_rgb = outputs["rgb"]  # Blended with background (black if random background)
         gt_rgb = self.renderer_rgb.blend_background(gt_rgb)
         acc = colormaps.apply_colormap(outputs["accumulation"])
         depth = colormaps.apply_depth_colormap(
@@ -519,44 +405,20 @@ class NerfactoModel(Model):
         combined_rgb = torch.cat([gt_rgb, predicted_rgb], dim=1)
         combined_acc = torch.cat([acc], dim=1)
         combined_depth = torch.cat([depth], dim=1)
-        
-        # ================================
-        # [CHANGE 3-2] pseudo-RGB도 object 영역만으로 metric 계산하고 싶다면
-        #            object bounding box로 crop해서 torchmetrics에 넣기 <-> Mask 픽셀만 직접 선택 — 정확, 하지만 PSNR/SSIM에는 부적합
-        #            Why? PSNR/SSIM/LPIPS는 H×W×C 형태의 “이미지”를 가정하고 만든 metric
-        #            Why? mask indexing은 shape을 → [C, H*W_masked_pixels] 로 바꿔버림 (2D -> 1D flatten)
-        # ================================
-        ys, xs = torch.where(obj_mask)
-        y0, y1 = ys.min(), ys.max() + 1
-        x0, x1 = xs.min(), xs.max() + 1
-        
-        gt_crop = gt_rgb[y0:y1, x0:x1, :]       # [h, w, 3]
-        pred_crop = predicted_rgb[y0:y1, x0:x1, :]
-        # ================================        
 
-        # pseudo-RGB 기준 perceptual metrics
-        gt_rgb_for_metrics = torch.moveaxis(gt_crop, -1, 0)[None, ...]
-        pred_rgb_for_metrics = torch.moveaxis(pred_crop, -1, 0)[None, ...]
+        # Switch images from [H, W, C] to [1, C, H, W] for metrics computations
+        gt_rgb = torch.moveaxis(gt_rgb, -1, 0)[None, ...]
+        predicted_rgb = torch.moveaxis(predicted_rgb, -1, 0)[None, ...]
 
-        psnr = self.psnr(gt_rgb_for_metrics, pred_rgb_for_metrics)
-        ssim = self.ssim(gt_rgb_for_metrics, pred_rgb_for_metrics)
-        lpips = self.lpips(gt_rgb_for_metrics, pred_rgb_for_metrics)
+        psnr = self.psnr(gt_rgb, predicted_rgb)
+        ssim = self.ssim(gt_rgb, predicted_rgb)
+        lpips = self.lpips(gt_rgb, predicted_rgb)
 
-        # 최종 metrics_dict
-        metrics_dict: Dict[str, float] = {
-            "PSNR": float(psnr.item()),
-            "SSIM": float(ssim),
-            "LPIPS": float(lpips),
-            "SAM_radius": float(sam_mean_rad),
-            "SAM_degree": float(sam_mean_deg),
-            "RMSE_spectral": float(rmse_mean),
-        }
+        # all of these metrics will be logged as scalars
+        metrics_dict = {"psnr": float(psnr.item()), "ssim": float(ssim)}  # type: ignore
+        metrics_dict["lpips"] = float(lpips)
 
-        images_dict: Dict[str, torch.Tensor] = {
-            "img": combined_rgb,
-            "accumulation": combined_acc,
-            "depth": combined_depth,
-        }
+        images_dict = {"img": combined_rgb, "accumulation": combined_acc, "depth": combined_depth}
 
         for i in range(self.config.num_proposal_iterations):
             key = f"prop_depth_{i}"

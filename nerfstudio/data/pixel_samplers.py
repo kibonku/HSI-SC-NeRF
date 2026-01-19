@@ -121,6 +121,7 @@ class PixelSampler:
         if num_valid != num_samples:
             warnings.warn(
                 """
+                ⚠️ Warning은 “ray 샘플링할 때 mask가 너무 작네요” 정도 -> “훈련/샘플링 단계"에 대한 것이지, ns-eval에서 우리가 계산한 SAM/RMSE/PSNR/SSIM 값에는 영향을 미치지 않아.
                 Masked sampling failed, mask is either empty or mostly empty.
                 Reverting behavior to non-rejection sampling. Consider setting
                 pipeline.datamanager.pixel-sampler.rejection-sample-mask to False

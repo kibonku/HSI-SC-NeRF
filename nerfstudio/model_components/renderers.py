@@ -135,12 +135,31 @@ class RGBRenderer(nn.Module):
             Background color as RGB.
         """
         assert background_color not in {"last_sample", "random"}
-        assert shape[-1] == 3, "Background color must be RGB."
+        
+        # <--- [COMMENT OUT OR REMOVE THIS LINE] ---
+        # assert shape[-1] == 3, "Background color must be RGB."
+        # --- [END BLOCK] ---
+        
         if BACKGROUND_COLOR_OVERRIDE is not None:
             background_color = BACKGROUND_COLOR_OVERRIDE
         if isinstance(background_color, str) and background_color in colors.COLORS_DICT:
             background_color = colors.COLORS_DICT[background_color]
         assert isinstance(background_color, Tensor)
+        
+        # --- background_color가 RGB scalar였더라도 10채널에 맞게 확장되도록 처리 ---
+        # background_color shape e.g. [3] but we need [10]
+        num_channels = shape[-1]
+        if background_color.shape[-1] != num_channels:
+            if background_color.shape[-1] == 1:
+                # grayscale → repeat
+                background_color = background_color.repeat(num_channels)
+            elif background_color.shape[-1] == 3:
+                # RGB → tile into num_channels bands
+                background_color = background_color.repeat(num_channels // 3)
+            else:
+                raise ValueError(
+                    f"Unsupported background_color shape {background_color.shape} for num_channels={num_channels}"
+                )
 
         # Ensure correct shape
         return background_color.expand(shape).to(device)
@@ -161,9 +180,12 @@ class RGBRenderer(nn.Module):
         Returns:
             Blended RGB.
         """
-        if image.size(-1) < 4:
+        
+        # <--- [REPLACE THIS CHECK] ---
+        if image.size(-1) != 4:
             return image
-
+        # <--- [REPLACE THIS CHECK] ---
+        
         rgb, opacity = image[..., :3], image[..., 3:]
         if background_color is None:
             background_color = self.background_color

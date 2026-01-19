@@ -466,9 +466,23 @@ class Nerfstudio(DataParser):
         data_dir: the directory of the data that contains the transform file
         downsample_folder_prefix: prefix of the newly generated downsampled images
         """
-
+        
         if self.downscale_factor is None:
+            # print("a: ", self.downscale_factor)
             if self.config.downscale_factor is None:
+                # print("b: ", self.downscale_factor)
+                                
+                # --- [INSERT THIS BLOCK BEFORE 'Image.open'] ---
+                # Prevent PIL from trying to open .npy files
+                if filepath.suffix == ".npy":
+                    
+                    # --> Make sure this variable is NOT None. If it is None, stop immediately.
+                    # npy -> no downscaling -> 1로 고정
+                    self.downscale_factor = 1   
+                    
+                    return data_dir / filepath
+                # --- [INSERT THIS BLOCK END] ---
+                
                 test_img = Image.open(data_dir / filepath)
                 h, w = test_img.size
                 max_res = max(h, w)
@@ -482,10 +496,13 @@ class Nerfstudio(DataParser):
 
                 self.downscale_factor = 2**df
                 CONSOLE.log(f"Auto image downscale factor of {self.downscale_factor}")
+                
+                # print("c: ", self.downscale_factor)     
             else:
                 self.downscale_factor = self.config.downscale_factor
-            assert self.downscale_factor is not None
-
+            assert self.downscale_factor is not None 
+                # --> Make sure this variable is NOT None. If it is None, stop immediately.
+    
         if self.downscale_factor > 1:
             return data_dir / f"{downsample_folder_prefix}{self.downscale_factor}" / filepath.name
         return data_dir / filepath

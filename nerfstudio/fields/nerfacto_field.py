@@ -96,6 +96,10 @@ class NerfactoField(Field):
         spatial_distortion: Optional[SpatialDistortion] = None,
         average_init_density: float = 1.0,
         implementation: Literal["tcnn", "torch"] = "tcnn",
+        
+        # [CHANGE 4] Update Field Constructor
+        num_output_channels: int = 204, # <--- [ADD ARGUMENT]
+                
     ) -> None:
         super().__init__()
 
@@ -194,7 +198,11 @@ class NerfactoField(Field):
             in_dim=self.direction_encoding.get_out_dim() + self.geo_feat_dim + self.appearance_embedding_dim,
             num_layers=num_layers_color,
             layer_width=hidden_dim_color,
-            out_dim=3,
+            
+            # [CHANGE 5] Update MLP Head dimensions
+            # <--- [CHANGE THIS LINE]
+            out_dim=num_output_channels,  # Was hardcoded to 3
+            
             activation=nn.ReLU(),
             out_activation=nn.Sigmoid(),
             implementation=implementation,

@@ -447,13 +447,6 @@ class Viewer:
         image_indices = self._pick_drawn_image_idxs(len(train_dataset))
         for idx in image_indices:
             image = train_dataset[idx]["image"]
-            
-            # --- [INSERT THIS BLOCK] ---
-            # FIX: Slice HSI (10-ch) to RGB (3-ch) for visualization
-            if image.shape[-1] > 3:
-                image = image[..., :3]
-            # --- [END BLOCK] ---
-            
             camera = train_dataset.cameras[idx]
             image_uint8 = (image * 255).detach().type(torch.uint8)
             image_uint8 = image_uint8.permute(2, 0, 1)

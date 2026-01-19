@@ -96,9 +96,8 @@ class InputDataset(Dataset):
         assert image.dtype == np.uint8
         assert image.shape[2] in [3, 4], f"Image shape of {image.shape} is incorrect."
         return image
-    
-    # --- Original FUNCTION ---
-    '''def get_image_float32(self, image_idx: int) -> Float[Tensor, "image_height image_width num_channels"]:
+
+    def get_image_float32(self, image_idx: int) -> Float[Tensor, "image_height image_width num_channels"]:
         """Returns a 3 channel image in float32 torch.Tensor.
 
         Args:
@@ -112,49 +111,7 @@ class InputDataset(Dataset):
                 self._dataparser_outputs.alpha_color <= 1
             ).all(), "alpha color given is out of range between [0, 1]."
             image = image[:, :, :3] * image[:, :, -1:] + self._dataparser_outputs.alpha_color * (1.0 - image[:, :, -1:])
-        return image'''
-        
-    # --- REPLACE the above function WITH THIS ---
-    """
-    STEP 2: PATCH THE DATA LOADER
-    Target File: nerfstudio/data/datasets/base_dataset.py
-
-    CLEAN LOADER LOGIC:
-    Because we updated 'transforms.json' in Step 4, the filename variable
-    will explicitly end with '.npy'.
-
-    We simply intercept this extension and load the NumPy array directly.
-    No complex filename swapping or "guessing" is needed.
-    """
-
-    # Find this method in class InputDataset:
-    def get_image_float32(self, image_idx: int) -> Float[Tensor, "image_height image_width num_channels"]:
-        """Returns a channel image in float32 torch.Tensor."""
-        
-        image_filename = self._dataparser_outputs.image_filenames[image_idx]
-        
-        # --- [INSERT THIS BLOCK START] ---
-        # EXPLICIT NPY LOADING
-        # If transforms.json points to .npy, we load it here.
-        if image_filename.suffix == ".npy":
-            import numpy as np
-            
-            # Load the NPY file directly (already float32, already correct scale)
-            data = np.load(image_filename)
-            
-            # Return as Torch Tensor
-            return torch.from_numpy(data).float()
-        # --- [INSERT THIS BLOCK END] ---
-
-        # ... Original code (fallback for standard RGB if needed) ...
-        image = self.get_numpy_image(image_idx)
-        image = image / np.float32(255)
-        image = torch.from_numpy(image)
-        
-        if self._dataparser_outputs.alpha_color is not None and image.shape[-1] == 4:
-            image = image[:, :, :3] * image[:, :, -1:] + self._dataparser_outputs.alpha_color * (1.0 - image[:, :, -1:])
         return image
-
 
     def get_image_uint8(self, image_idx: int) -> UInt8[Tensor, "image_height image_width num_channels"]:
         """Returns a 3 channel image in uint8 torch.Tensor.
