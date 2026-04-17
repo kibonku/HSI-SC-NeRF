@@ -356,16 +356,16 @@ def collect_camera_poses(pipeline: VanillaPipeline) -> Tuple[List[Dict[str, Any]
 def generate_hsi_point_cloud(
     pipeline: Pipeline,
     num_points: int = 1000000,
-    hsi_output_name: str = "rgb",      # outputs 안에서 10-band 이름 (지금은 "rgb"일 가능성 높음)
+    hsi_output_name: str = "rgb",      
     depth_output_name: str = "depth",
     crop_obb: Optional[OrientedBox] = None,
     opacity_thresh: float = 0.5,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Hyperspectral용 포인트클라우드 (점 + 10-band) 생성.
+    """Export hyperspectral point clouds (x,y,z + C-band HSI) from a trained nerf.
 
-    반환:
+    Returns:
         points: [N, 3]  (x,y,z)
-        bands:  [N, C]  (C=10 같은 channel 수)
+        bands:  [N, C]  (channel-wise HSI values)
     """
 
     points_list: List[torch.Tensor] = []
@@ -400,16 +400,15 @@ def generate_hsi_point_cloud(
                 CONSOLE.print(f"Available keys: {list(outputs.keys())}", justify="center")
                 sys.exit(1)
 
-            # 10-band (또는 C-band) 출력
-            hsi = outputs[hsi_output_name]        # [R, C] 형태 (이미 ray-wise 합성된 이미지라고 가정)
-            depth = outputs[depth_output_name]    # [R, 1] 또는 [R]
+            hsi = outputs[hsi_output_name]        # [R, C] (Assumed to be the C-band HSI output)
+            depth = outputs[depth_output_name]    # [R, 1] or [R]
 
-            # 불투명도(적분된 alpha) 기준으로 필터링
+            # Filter points based on opacity if available
             if "accumulation" in outputs:
                 opacity = outputs["accumulation"].squeeze(-1)
                 mask = opacity > opacity_thresh
             else:
-                # 없으면 전부 사용
+                # If no opacity information is available, use all points (or you could choose to skip these points instead by using mask = torch.zeros_like(depth[..., 0], dtype=torch.bool))
                 mask = torch.ones_like(depth[..., 0], dtype=torch.bool)
 
             depth = depth[mask]                   # [M, 1]
@@ -432,7 +431,7 @@ def generate_hsi_point_cloud(
             progress_bar.advance(task, pts.shape[0])
 
             if pts.shape[0] == 0:
-                # 안전장치: 더 이상 쌓을 수 없으면 중단
+                # Safe-guard to avoid infinite loop if no points are being collected (e.g., due to too high opacity threshold or aggressive cropping)
                 break
 
     if len(points_list) == 0:
@@ -445,14 +444,14 @@ def generate_hsi_point_cloud(
 
 
 ####----------------------------HSI PCD GENERATOR------------------###
-from typing import List, Tuple  # 파일 상단에 이미 있을 수도 있음 (없으면 추가)
+from typing import List, Tuple 
 
 def generate_hsi_point_cloud(
     pipeline: Pipeline,
     num_points: int = 1000000,
-    hsi_output_name: str = "rgb",      # 10-band 출력 키
+    hsi_output_name: str = "rgb",      # C-band printing output name (e.g., "hsi" or "rgb" if the RGB output is actually a C-band HSI)
     depth_output_name: str = "depth",
-    normal_output_name: Optional[str] = None,  # "normals" 로 쓰면 노멀도 같이 추출
+    normal_output_name: Optional[str] = None,  # Optional normal output name (if normals are also desired in the point cloud)
     crop_obb: Optional[OrientedBox] = None,
     opacity_thresh: float = 0.5,
 ) -> Tuple[Tensor, Tensor, Optional[Tensor]]:
@@ -528,7 +527,7 @@ def generate_hsi_point_cloud(
                     CONSOLE.print(f"Available keys: {list(outputs.keys())}", justify="center")
                     sys.exit(1)
                 normal = outputs[normal_output_name]
-                # nerfstudio 기본: [0,1] -> [-1,1] 로 변환
+                # nerfstudio's default: [0,1] -> [-1,1] update
                 assert torch.min(normal) >= 0.0 and torch.max(normal) <= 1.0, \
                     "Normal values must be in [0,1] before mapping to [-1,1]"
                 normal = (normal * 2.0) - 1.0

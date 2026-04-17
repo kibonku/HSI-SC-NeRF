@@ -1,14 +1,14 @@
 from pathlib import Path
 import json
 
-# === 1. Nerfstudio 데이터셋 루트 ===
-DATA_DIR = Path(r"nerfstudio/_custom_dataset/2.pre_final/pear/204_hsi_WR_mask")  # <- 네 transforms.json 있는 폴더로 수정
+# === 1. Nerfstudio dataset root ===
+DATA_DIR = Path("{MASK_DIR}")  # Update this to your actual dataset path containing transforms.json and the masks folder
 
 TF_PATH = DATA_DIR / "transforms.json"
-MASK_REL_DIR = "masks"   # transforms.json에서 쓸 상대 경로 이름
+MASK_REL_DIR = "masks"   # transforms.json will point to masks using this relative path; e.g. "masks/frame_00001.png" for each frame's mask_path
 
-# === 2. 마스크 파일이 들어있는 폴더 ===
-MASK_DIR = DATA_DIR / MASK_REL_DIR   # 이미 frame_00001.png 등 복사해두었다고 가정
+# === 2. folder with mask files ===
+MASK_DIR = DATA_DIR / MASK_REL_DIR   # upload masks to this folder before running the script 
 
 assert TF_PATH.exists(), f"transforms.json not found: {TF_PATH}"
 assert MASK_DIR.exists(), f"Mask dir not found: {MASK_DIR}"

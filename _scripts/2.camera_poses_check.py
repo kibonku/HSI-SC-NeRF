@@ -168,27 +168,19 @@ def plot_and_save_cameras(cameras, arrow_length=0.4,
 if __name__ == '__main__':
     
     global FRUIT
-    FRUIT = "S10_t4"
     
-    par_dir = f"nerfstudio/_custom_dataset_application-paper/2.pre/S10/{FRUIT}"
+    #----- Replace with your actual path
+    FRUIT = "{FRUIT_NAME}"  
+    PAR_DIR = "{PARENT_DIR_PATH}"
+    FRUIT_DIR = "{PAR_DIR}/{FRUIT}"
+    JSON_FILE = "{FRUIT_DIR}/transforms.json"
     
-    # folder_list= sorted(os.listdir(par_dir))
-    folder_list = ['pseudo_rgb_WR_mask_colmap']
+    cameras = load_camera_data(JSON_FILE)
     
-    print('folder_list: ', folder_list)
+    print(f"Loaded {len(cameras)} cameras.")
     
-    for folder in folder_list:
-        
-        # folder = 'S3'        
-        print('folder: ', folder)
-        
-        json_file = f"{par_dir}/{folder}/transforms.json"
-        cameras = load_camera_data(json_file)
-        
-        print(f"Loaded {len(cameras)} cameras.")
-        
-        plot_and_save_cameras(cameras, arrow_length=1,
-                            default_save_path= f"{par_dir}/{folder}/isometric-view.png",
-                            top_view_save_path= f"{par_dir}/{folder}/top-view.png")
-        
+    plot_and_save_cameras(cameras, arrow_length=1,
+                        default_save_path= f"{FRUIT_DIR}/isometric-view.png",
+                        top_view_save_path= f"{FRUIT_DIR}/top-view.png")
     
+

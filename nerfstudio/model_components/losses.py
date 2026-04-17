@@ -343,6 +343,40 @@ def monosdf_normal_loss(
     return l1 + cos
 
 
+
+# ============================
+# [CHANGE] Angular Spectral loss
+# ============================
+def angular_spectral_loss(pred, target, mask=None, loss_type="cosine", eps=1e-8):
+    assert pred.shape[-1] == target.shape[-1]
+    C = pred.shape[-1]
+    pred_flat = pred.reshape(-1, C)
+    tgt_flat  = target.reshape(-1, C)
+
+    if mask is not None:
+        mask_flat = mask.reshape(-1).bool()
+        if mask_flat.sum() == 0:
+            # keep graph connection but contribute zero
+            return pred_flat.sum() * 0.0
+        pred_flat = pred_flat[mask_flat]
+        tgt_flat  = tgt_flat[mask_flat]
+
+    n_pred = torch.linalg.norm(pred_flat, dim=-1, keepdim=True)
+    n_tgt  = torch.linalg.norm(tgt_flat,  dim=-1, keepdim=True)
+
+    pred_u = pred_flat / (n_pred + eps)
+    tgt_u  = tgt_flat  / (n_tgt  + eps)
+
+    cos = (pred_u * tgt_u).sum(dim=-1)
+    cos = torch.clamp(cos, -1.0 + eps, 1.0 - eps)
+
+    if loss_type == "acos":
+        return torch.acos(cos).mean()
+    return (1.0 - cos).mean()
+
+
+
+
 class MiDaSMSELoss(nn.Module):
     """
     data term from MiDaS paper

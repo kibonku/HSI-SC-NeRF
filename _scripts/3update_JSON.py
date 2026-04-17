@@ -14,9 +14,9 @@ data is .npy.
 import json
 import os
 
-# Path to your processed project folder containing transforms.json
-RGB_DIR = r"nerfstudio/_custom_dataset/2.pre_final/maize/pseudo_rgb_WR_mask_colmap" 
-HSI_DIR = r"nerfstudio/_custom_dataset/2.pre_final/maize/204_hsi_WR_mask" 
+# Path to your preprocessed project folder containing transforms.json
+RGB_DIR = "{PAR_DIR}/2.preprocessed/{FRUIT}/pseudo_rgb_WR_mask_colmap"  # Update this to your actual RGB directory path
+HSI_DIR = "{PAR_DIR}/2.preprocessed/{FRUIT}/{TARGET_BANDS}_hsi_WR_mask"  # Update this to your actual HSI directory path
 
 RGB_JSON_PATH = os.path.join(RGB_DIR, "transforms.json")
 HSI_JSON_PATH = os.path.join(HSI_DIR, "transforms.json")
@@ -49,7 +49,7 @@ def update_json():
         json.dump(data, f, indent=4)
     
     print("Saved updated transforms.json")
-    print("Now you can run training: ns-train nerfacto --data ./3_hsi")
+    print("Now you can run training: ns-train nerfacto")
 
 if __name__ == "__main__":
     update_json()

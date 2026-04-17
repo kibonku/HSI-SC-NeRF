@@ -11,7 +11,7 @@ Features:
 6. (Optional) Saves pseudo-RGB for COLMAP.
 7. White Reference calibration:
        I_norm(x,y,λ) = I(x,y,λ) / WR_mean_smooth(λ)
-   where WR_mean_smooth is the refined mean WR spectrum
+   where WR_mean_smooth is the refined (and smoothed) mean WR spectrum
    computed only from an automatically selected central WR region.
 """
 
@@ -25,18 +25,18 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 # ---------------------------------------------------------
-# CONFIGURATION
+# CONFIGURATION: Replace with your actual path
 # ---------------------------------------------------------
-PAR_DIR = r"nerfstudio/_custom_dataset"
-source_list = ['honeyscrisp/NC1_t1', 'maize/Oh43x_SC', 'pear']
-SOURCE = source_list[2]      # change if needed
+PAR_DIR = "{PATH_TO_YOUR_PROJECT_FOLDER}"  
 
-TARGET_BANDS = 204           # if using full bands
-RGB_BAND_INDICES = (70, 53, 19)
+FRUIT = "{REPLACE_FRUIT_NAME}"  
 
-INPUT_DIR = f"{PAR_DIR}/1.raw/{SOURCE}/REFLECTANCE"
-BASE_OUTPUT_DIR = f"{PAR_DIR}/2.pre/{SOURCE}/{TARGET_BANDS}_hsi_WR"
-rgb_dir = f"{PAR_DIR}/1.raw/{SOURCE}/pseudo_rgb_WR"
+TARGET_BANDS = "{TARGET_BANDS_NUMBER}"   # 204 if using full bands
+RGB_BAND_INDICES = (70, 53, 19)  # Example: (70, 53, 19) for R,G,B; set to None to skip pseudo-RGB saving
+
+INPUT_DIR = "{PAR_DIR}/1.raw/{FRUIT}/REFLECTANCE"
+BASE_OUTPUT_DIR = "{PAR_DIR}/2.preprocessed/{FRUIT}/{TARGET_BANDS}_hsi_WR_mask"
+RGB_DIR = "{PAR_DIR}/2.preprocessed/{FRUIT}/pseudo_rgb_WR_mask_colmap"
 
 # ---------------------------------------------------------
 # WHITE REFERENCE SETTINGS
@@ -44,15 +44,19 @@ rgb_dir = f"{PAR_DIR}/1.raw/{SOURCE}/pseudo_rgb_WR"
 USE_WR_CALIB = True
 
 # Path to WR cube (update the filename to your actual WR image)
-WR_HDR_PATH = r"nerfstudio/_custom_dataset/1.raw/WR_cubert/REFLECTANCE_386.hdr"
+WR_HDR_PATH = "nerfstudio/_assets/WR_REFLECTANCE.hdr" 
+WR_CALIB_SAVE = os.path.join("nerfstudio/_assets/wr_mean_spectrum.npy")
 
-# WR tarp ROI (after rotation) – coarse rectangle that contains the WR board
+# WR tarp ROI (after rotation): adjust these bounds based on your actual WR position in the image; they are inclusive
 WR_X_MIN, WR_Y_MIN = 74, 124
-WR_X_MAX, WR_Y_MAX = 440, 451   # inclusive
+WR_X_MAX, WR_Y_MAX = 440, 451  
+
+# A 70th-percentile threshold was used to select the most uniform 70% of WR pixels, which correspond to the central region of the board. 
+REL_PERCENTILE = 70.0
 
 
 # ---------------------------------------------------------
-# Helper: smoothing (spectral direction)  [not used now, but kept]
+# Helper: smoothing (spectral direction)
 # ---------------------------------------------------------
 def smooth_1d(signal: np.ndarray, kernel_size: int = 5) -> np.ndarray:
     """Simple moving-average smoothing along spectral axis."""
@@ -71,7 +75,7 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
     Computes a refined WR mean spectrum from an automatically selected
     central region of the WR tarp.
 
-    Steps:
+    Pipeline:
       1) Load WR cube and extract coarse rectangular WR ROI.
       2) First-pass mean over all ROI pixels.
       3) Compute per-pixel relative deviation:
@@ -79,11 +83,14 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
       4) Threshold r(x,y) at the given percentile to obtain initial mask.
       5) Morphologically close/open the mask and keep the largest component
          → smooth, central polygon-like region.
-      6) Compute mean spectrum using only pixels inside this region.
-      7) Save:
+      6) Compute μ_refined(λ) using only pixels inside this region.
+      7) Report deviation stats (all ROI vs masked region) using μ_refined.
+      8) At the very end, smooth μ_refined along λ → wr_mean_smooth.
+      9) Save:
            - x-y deviation map with contour overlay
            - histogram of relative deviations (masked region)
-      8) Return wr_mean_smooth (1D array, length = B).
+           - full-size WR mask aligned with pseudo-RGB
+     10) Return wr_mean_smooth (1D array, length = B).
     """
     print("[WR] Loading WR cube...")
     img_obj = envi.open(WR_HDR_PATH)
@@ -109,8 +116,8 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
     # -----------------------------------------------------
     # 1) First-pass mean and relative deviation r(x,y)
     # -----------------------------------------------------
-    wr_pixels = wr_roi.reshape(-1, B)            # (N,B)
-    mu_raw = wr_pixels.mean(axis=0)             # (B,)
+    wr_pixels = wr_roi.reshape(-1, B)      # (N,B)
+    mu_raw = wr_pixels.mean(axis=0)       # (B,)
 
     dev_cube = wr_roi - mu_raw.reshape(1, 1, -1)
     dev_abs_xy = np.mean(np.abs(dev_cube), axis=2)   # (H_roi,W_roi)
@@ -126,7 +133,6 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
     # -----------------------------------------------------
     # 2) Threshold + morphology → automatic central mask
     # -----------------------------------------------------
-    # Threshold at given percentile (e.g., 70% → keep best 70% lowest deviations)
     thr = np.percentile(rel_flat, rel_percentile)
     print(f"[WR] Thresholding relative deviation at {rel_percentile:.1f} percentile (thr={thr:.4f})")
     mask0 = (rel_dev_xy <= thr).astype(np.uint8)
@@ -146,8 +152,7 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
         print("[WR] WARNING: only background found in mask; falling back to mask0.")
         final_mask = mask0.astype(bool)
     else:
-        # stats[0] is background; choose largest area label>=1
-        areas = stats[1:, cv2.CC_STAT_AREA]
+        areas = stats[1:, cv2.CC_STAT_AREA]   # stats[0] is background
         best_label = 1 + np.argmax(areas)
         final_mask = (labels == best_label)
         print(f"[WR] Connected components: {num_labels-1}, using label {best_label} with area {areas.max()}")
@@ -158,17 +163,20 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
           f"({100*frac_good:.1f}%) inside automatic central mask for WR mean.")
 
     good_pixels = wr_roi[final_mask]    # (N_good,B)
-    
+
+    # -----------------------------------------------------
+    # 3) Refined mean from automatic central region
+    # -----------------------------------------------------
     mu_refined = good_pixels.mean(axis=0)        # (B,)
 
     # -----------------------------------------------------
-    # 3) Recompute deviation with refined mean (for reporting)
+    # 4) Recompute deviation with refined (unsmoothed) mean → for reporting
     # -----------------------------------------------------
     dev_cube2   = wr_roi - mu_refined.reshape(1, 1, -1)
     dev_abs_xy2 = np.mean(np.abs(dev_cube2), axis=2)
     mean_xy2    = np.mean(wr_roi, axis=2)
     rel_dev2    = dev_abs_xy2 / (mean_xy2 + 1e-6)
-    
+
     rel_all = rel_dev2.ravel()
     rel_good = rel_dev2[final_mask]
 
@@ -181,27 +189,22 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
     print(f"    median rel dev : {np.median(rel_good):.4f}")
     print(f"    95% rel dev    : {np.percentile(rel_good, 95):.4f}")
     print(f"    max rel dev    : {np.max(rel_good):.4f}")
-    
-    
+
     # -----------------------------------------------------
-    # 3) Refined mean from automatic polygon region
+    # 5) Final WR spectrum for calibration = smoothed μ_refined
+    #     (smoothing is only done ONCE here at the very end)
     # -----------------------------------------------------
-    mu_refined = rel_good .mean(axis=0)  # (B,)
-    # Smooth the refined WR spectrum
     mu_smoothed = smooth_1d(mu_refined, kernel_size=5)
-    # Avoid zero division
     wr_mean_smooth = np.clip(mu_smoothed, 1e-4, None)
 
     # -----------------------------------------------------
-    # 5) Save deviation map + contour + histogram
+    # 6) Save deviation map + contour + histogram + full-size mask
     # -----------------------------------------------------
     base = Path(WR_HDR_PATH).with_suffix("")
-    
-        # -----------------------------------------------------
+
     # Save final mask as FULL-SIZE mask only
-    # -----------------------------------------------------
     pseudo_files = sorted(
-        f for f in glob.glob(os.path.join(rgb_dir, "*.png"))
+        f for f in glob.glob(os.path.join(RGB_DIR, "*.png"))
         if "WR" not in os.path.basename(f)
     )
 
@@ -216,36 +219,32 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
         mask_full = np.zeros((H_full, W_full), dtype=np.uint8)
 
         # place the WR ROI mask in correct position
-        # final_mask → shape (H_roi, W_roi)
         mask_full[y0:y1, x0:x1] = (final_mask.astype(np.uint8) * 255)
 
         # save full-size mask
-        mask_path = str(base) + "_WR_mask_full.png"
+        mask_path = str(base) + f"_{rel_percentile}th_WR_mask_full.png"
         cv2.imwrite(mask_path, mask_full)
         print(f"[WR] Saved FULL-SIZE WR mask → {mask_path}")
-    
 
-    # Normalize deviation map for visualization
+    #* Deviation map (using mu_refined)
     dev_norm = (dev_abs_xy2 - dev_abs_xy2.min()) / (dev_abs_xy2.ptp() + 1e-8)
-
+    
     plt.figure(figsize=(6.5, 5))
     im = plt.imshow(dev_norm, origin="upper", cmap="magma")
     cbar = plt.colorbar(im)
     cbar.set_label(r"mean$_\lambda\,|I_{WR}(x,y,\lambda) - \mu_{WR}(\lambda)|$")
-    
     plt.title("WR Intensity Deviation (x-y, λ-mean)")
     plt.xlabel("x (within WR ROI)")
     plt.ylabel("y (within WR ROI)")
     plt.tight_layout()
-    
-    out_xy = str(base) + "_WR_xy_deviation.png"
-    plt.savefig(out_xy, dpi=200)
-    
-    # overlay contour of automatic mask
+
+    # out_xy = str(base) + f"_{rel_percentile}th_WR_xy_deviation.png"
+    # plt.savefig(out_xy, dpi=200)
+
+    #* overlay contour of automatic mask
     plt.contour(final_mask.astype(float), levels=[0.5], colors="red", linewidths=2)
-    
     plt.title("WR Intensity Deviation (x-y, λ-mean) with automatic mask")
-    out_xy = str(base) + "_WR_xy_deviation_autoMask.png"
+    out_xy = str(base) + f"_{rel_percentile}th_WR_xy_deviation_autoMask.png"
     plt.savefig(out_xy, dpi=200)
     plt.close()
     print(f"[WR] Saved x-y deviation map with mask → {out_xy}")
@@ -256,7 +255,7 @@ def compute_wr_mean_spectrum(rel_percentile: float = 70.0):
     plt.ylabel("Pixel count")
     plt.title("WR relative deviations (automatic central region)")
     plt.tight_layout()
-    out_hist = str(base) + "_WR_rel_deviation_hist_autoMask.png"
+    out_hist = str(base) + f"_{rel_percentile}th_WR_rel_deviation_hist_autoMask.png"
     plt.savefig(out_hist, dpi=200)
     plt.close()
     print(f"[WR] Saved deviation histogram → {out_hist}\n")
@@ -273,7 +272,7 @@ def process_batch():
     for scale, folder_name in scales.items():
         Path(os.path.join(BASE_OUTPUT_DIR, folder_name)).mkdir(parents=True, exist_ok=True)
 
-    Path(rgb_dir).mkdir(parents=True, exist_ok=True)
+    Path(RGB_DIR).mkdir(parents=True, exist_ok=True)
 
     # Find HSI files
     files = sorted(glob.glob(os.path.join(INPUT_DIR, "*.hdr")))
@@ -284,20 +283,24 @@ def process_batch():
     print(f"Output base: {BASE_OUTPUT_DIR}")
     print("-" * 50)
 
-    # Compute WR mean spectrum
+    # Compute WR mean spectrum (once); 1D spectral curve (per‐band reflectance curve) 
+    # mean over pixels → spectrum over λ --> smooth along λ → wr_mean_smooth(λ) for final calibration
     wr_mean_spectrum = None
     if USE_WR_CALIB:
         try:
-            wr_mean_spectrum = compute_wr_mean_spectrum(rel_percentile=70.0)
+            wr_mean_spectrum = compute_wr_mean_spectrum(REL_PERCENTILE)
+            # np.save(WR_CALIB_SAVE, wr_mean_spectrum.astype(np.float32))
+            # print(f"[WR] Saved WR mean spectrum → {WR_CALIB_SAVE}")
         except Exception as e:
             print(f"[WR] Error computing WR mean spectrum: {e}")
             wr_mean_spectrum = None
+    # print('wr_mean_spectrum:', wr_mean_spectrum)      
+    
 
     # Process each cube
     frame_counter = 1
     for filepath in files:
-        break
-    
+        # break
         filename = os.path.basename(filepath)
 
         # Skip the WR file itself
@@ -320,6 +323,8 @@ def process_batch():
             # WR mean normalization
             if wr_mean_spectrum is not None:
                 if wr_mean_spectrum.shape[0] == reduced_data.shape[2]:
+                    
+                    # wr_mean_spectrum(길이 B 벡터) -> reshape(1,1,-1) 해서 (1,1,B) 로 만든 다음 모든 (x,y)에 브로드캐스트
                     reduced_data = reduced_data / wr_mean_spectrum.reshape(1, 1, -1)
                 else:
                     print(
@@ -357,12 +362,12 @@ def process_batch():
                 rgb_uint8 = (rgb_norm * 255).astype(np.uint8)
 
                 img = Image.fromarray(rgb_uint8)
-                img.save(os.path.join(rgb_dir, f"{frame_name}.png"))
+                img.save(os.path.join(RGB_DIR, f"{frame_name}.png"))
             except Exception as e:
                 print(f"[RGB] Failed to save pseudo-RGB for {filename}: {e}")
 
-            # (Optional) save multi-scale .npy – currently commented
-            """
+            # Save multi-scale .npy – currently commented
+        
             for scale, folder_name in scales.items():
                 save_path = os.path.join(BASE_OUTPUT_DIR, folder_name, f"{frame_name}.npy")
                 if scale == 1:
@@ -372,7 +377,7 @@ def process_batch():
                     final_data = cv2.resize(reduced_data, (new_w, new_h),
                                             interpolation=cv2.INTER_AREA)
                 np.save(save_path, final_data)
-            """
+    
 
             print(f"[{frame_counter}] {filename} -> {frame_name}")
             frame_counter += 1
