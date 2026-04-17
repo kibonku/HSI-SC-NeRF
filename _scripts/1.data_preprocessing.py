@@ -15,14 +15,15 @@ Features:
    computed only from an automatically selected central WR region.
 """
 
-import spectral.io.envi as envi
-import numpy as np
-import os
 import glob
-import cv2
+import os
 from pathlib import Path
-from PIL import Image
+
+import cv2
 import matplotlib.pyplot as plt
+import numpy as np
+import spectral.io.envi as envi
+from PIL import Image
 
 # ---------------------------------------------------------
 # CONFIGURATION: Replace with your actual path

@@ -1,8 +1,10 @@
-import json, os
-import numpy as np
+import json
+import os
+
 import matplotlib.pyplot as plt
-from matplotlib.path import Path
+import numpy as np
 from matplotlib.patches import FancyArrowPatch
+from matplotlib.path import Path
 from mpl_toolkits.mplot3d import proj3d
 
 plt.style.use('ggplot')

@@ -34,12 +34,12 @@ from nerfstudio.fields.density_fields import HashMLPDensityField
 from nerfstudio.fields.nerfacto_field import NerfactoField
 from nerfstudio.model_components.losses import (
     MSELoss,
+    angular_spectral_loss,  # CHANGE #
     distortion_loss,
     interlevel_loss,
     orientation_loss,
     pred_normal_loss,
     scale_gradients_by_distance_squared,
-    angular_spectral_loss   # CHANGE #
 )
 from nerfstudio.model_components.ray_samplers import ProposalNetworkSampler, UniformSampler
 from nerfstudio.model_components.renderers import AccumulationRenderer, DepthRenderer, NormalsRenderer, RGBRenderer
@@ -47,6 +47,7 @@ from nerfstudio.model_components.scene_colliders import NearFarCollider
 from nerfstudio.model_components.shaders import NormalsShader
 from nerfstudio.models.base_model import Model, ModelConfig
 from nerfstudio.utils import colormaps
+
 
 @dataclass
 class NerfactoModelConfig(ModelConfig):

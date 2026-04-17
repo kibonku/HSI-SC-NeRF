@@ -1,5 +1,5 @@
-from pathlib import Path
 import json
+from pathlib import Path
 
 # === 1. Nerfstudio dataset root ===
 DATA_DIR = Path("{MASK_DIR}")  # Update this to your actual dataset path containing transforms.json and the masks folder

@@ -444,7 +444,8 @@ def generate_hsi_point_cloud(
 
 
 ####----------------------------HSI PCD GENERATOR------------------###
-from typing import List, Tuple 
+from typing import List, Tuple
+
 
 def generate_hsi_point_cloud(
     pipeline: Pipeline,
