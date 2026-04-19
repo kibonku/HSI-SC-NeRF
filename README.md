@@ -49,25 +49,41 @@ ns-export hsi-pointcloud     --load-config <CONFIG_YML_PATH>     --output-dir <P
 ### Step 1. Preprocess and estimate poses
 
 ```bash
-time ns-process-data images     --data data/pseudo_rgb     --output-dir data/processed     --sfm-tool colmap     --matching-method sequential     --feature-type any     --matcher-type any     --use-single-camera-mode     --same-dimensions     --no-refine-intrinsics     --camera-type simple_pinhole     --num-downscales 3
+ns-process-data images\
+--data data/pseudo_rgb     --output-dir data/processed\
+--sfm-tool colmap     --matching-method sequential     --feature-type any     --matcher-type any\
+--use-single-camera-mode     --same-dimensions     --no-refine-intrinsics     --camera-type simple_pinhole     --num-downscales 3
 ```
 
 ### Step 2. Train hyperspectral NeRF
 
 ```bash
-ns-train nerfacto     --data data/processed     --output-dir outputs     --pipeline.model.num-output-channels 139     --pipeline.model.predict-normals True     --viewer.quit-on-train-completion True     --pipeline.model.far_plane 2.0     --pipeline.model.near_plane 0.05     --pipeline.datamanager.pixel-sampler.max-num-iterations 20000     --pipeline.model.camera-optimizer.mode off     --pipeline.model.hsi_loss_mult 1.0     --pipeline.model.angular_loss_mult 0.0     --max-num-iterations 20000
+ns-train nerfacto\
+--data data/processed     --output-dir outputs\
+--pipeline.model.num-output-channels <the number of channels>\
+--pipeline.model.predict-normals True     --viewer.quit-on-train-completion True\
+--pipeline.model.far_plane <0.6>     --pipeline.model.near_plane <0.02>\
+--pipeline.datamanager.pixel-sampler.max-num-iterations <20000>\
+--pipeline.model.camera-optimizer.mode <off>\
+--pipeline.model.hsi_loss_mult <1.0>     --pipeline.model.angular_loss_mult <0.0>\
+--max-num-iterations <20000>
 ```
 
 ### Step 3. Evaluate
 
 ```bash
-ns-eval     --load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml     --output-path eval_metrics.json
+ns-eval\
+--load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml\
+--output-path eval_metrics.json
 ```
 
 ### Step 4. Export hyperspectral point cloud
 
 ```bash
-ns-export hsi-pointcloud     --load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml     --output-dir exports/hsi_pointcloud     --num-points 1000000
+ns-export hsi-pointcloud\
+--load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml\
+--output-dir exports/hsi_pointcloud\
+--num-points <1000000>
 ```
 
 ## Dataset
