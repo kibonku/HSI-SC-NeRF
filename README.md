@@ -23,25 +23,43 @@ This repository provides code and commands for:
 ### 1. Pose Estimation (COLMAP) using pseudo-RGB images
 
 ```bash
-time ns-process-data images     --data <INPUT_IMAGE_DIR>     --output-dir <PROCESSED_OUTPUT_DIR>     --sfm-tool colmap     --matching-method sequential     --feature-type any     --matcher-type any     --use-single-camera-mode     --same-dimensions     --no-refine-intrinsics     --camera-type simple_pinhole     --num-downscales 3
+time ns-process-data images \
+--data <INPUT_IMAGE_DIR> \
+--output-dir <PROCESSED_OUTPUT_DIR> \
+--sfm-tool colmap     --matching-method sequential     --feature-type any     --matcher-type any \
+--use-single-camera-mode     --same-dimensions     --no-refine-intrinsics     --camera-type simple_pinhole     --num-downscales 3
 ```
 
 ### 2. Train HSI NeRF
 
 ```bash
-ns-train nerfacto     --data <PROCESSED_OUTPUT_DIR>     --output-dir <TRAIN_OUTPUT_DIR>     --pipeline.model.num-output-channels <NUM_HSI_CHANNELS>     --pipeline.model.predict-normals True     --viewer.quit-on-train-completion True     --pipeline.model.far_plane <FAR_PLANE>     --pipeline.model.near_plane <NEAR_PLANE>     --pipeline.datamanager.pixel-sampler.max-num-iterations <SAMPLER_MAX_ITERS>     --pipeline.model.camera-optimizer.mode <CAMERA_OPTIMIZER_MODE>     --pipeline.model.hsi_loss_mult <HSI_LOSS_WEIGHT>     --pipeline.model.angular_loss_mult <ANGULAR_LOSS_WEIGHT>     --max-num-iterations <MAX_ITERS>
+ns-train nerfacto \
+--data <PROCESSED_OUTPUT_DIR> \
+--output-dir <TRAIN_OUTPUT_DIR> \
+--pipeline.model.num-output-channels <NUM_HSI_CHANNELS> \
+--pipeline.model.predict-normals True     --viewer.quit-on-train-completion True \
+--pipeline.model.far_plane <FAR_PLANE>     --pipeline.model.near_plane <NEAR_PLANE> \
+--pipeline.datamanager.pixel-sampler.max-num-iterations <SAMPLER_MAX_ITERS> \
+--pipeline.model.camera-optimizer.mode <CAMERA_OPTIMIZER_MODE> \
+--pipeline.model.hsi_loss_mult <HSI_LOSS_WEIGHT>     --pipeline.model.angular_loss_mult <ANGULAR_LOSS_WEIGHT> \
+--max-num-iterations <MAX_ITERS>
 ```
 
 ### 3. Evaluation
 
 ```bash
-ns-eval     --load-config <CONFIG_YML_PATH>     --output-path eval_metrics.json
+ns-eval \
+--load-config <CONFIG_YML_PATH> \
+--output-path eval_metrics.json
 ```
 
 ### 4. Export Hyperspectral Point Cloud
 
 ```bash
-ns-export hsi-pointcloud     --load-config <CONFIG_YML_PATH>     --output-dir <POINTCLOUD_OUTPUT_DIR>     --num-points <NUM_POINTS>
+ns-export hsi-pointcloud \
+--load-config <CONFIG_YML_PATH> \
+--output-dir <POINTCLOUD_OUTPUT_DIR> \
+--num-points <NUM_POINTS>
 ```
 
 ## Example Workflow
@@ -59,31 +77,31 @@ ns-process-data images\
 
 ```bash
 ns-train nerfacto\
---data data/processed     --output-dir outputs\
---pipeline.model.num-output-channels <the number of channels>\
---pipeline.model.predict-normals True     --viewer.quit-on-train-completion True\
---pipeline.model.far_plane <0.6>     --pipeline.model.near_plane <0.02>\
---pipeline.datamanager.pixel-sampler.max-num-iterations <20000>\
---pipeline.model.camera-optimizer.mode <off>\
---pipeline.model.hsi_loss_mult <1.0>     --pipeline.model.angular_loss_mult <0.0>\
---max-num-iterations <20000>
+--data data/processed     --output-dir outputs \
+--pipeline.model.num-output-channels 10 \
+--pipeline.model.predict-normals True     --viewer.quit-on-train-completion True \
+--pipeline.model.far_plane 0.6     --pipeline.model.near_plane 0.02 \
+--pipeline.datamanager.pixel-sampler.max-num-iterations 20000 \
+--pipeline.model.camera-optimizer.mode off \
+--pipeline.model.hsi_loss_mult 1.0     --pipeline.model.angular_loss_mult 0.0 \
+--max-num-iterations 20000
 ```
 
 ### Step 3. Evaluate
 
 ```bash
-ns-eval\
---load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml\
+ns-eval \
+--load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml \
 --output-path eval_metrics.json
 ```
 
 ### Step 4. Export hyperspectral point cloud
 
 ```bash
-ns-export hsi-pointcloud\
---load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml\
---output-dir exports/hsi_pointcloud\
---num-points <1000000>
+ns-export hsi-pointcloud \
+--load-config outputs/<experiment_name>/nerfacto/<timestamp>/config.yml \
+--output-dir exports/hsi_pointcloud \
+--num-points 1000000
 ```
 
 ## Dataset
