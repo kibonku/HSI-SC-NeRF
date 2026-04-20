@@ -2,6 +2,10 @@
 
 Codebase for **HSI-SC-NeRF**, a stationary-camera-based hyperspectral NeRF framework for 3D plant phenotyping and postharvest agricultural inspection.
 
+<p align="center">
+  <img src="graphfical_abstract.jpg" width="">
+</p>
+
 ## Links
 
 - **Paper:** [arXiv:2602.16950](https://arxiv.org/abs/2602.16950)
