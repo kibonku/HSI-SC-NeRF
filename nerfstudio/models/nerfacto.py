@@ -516,7 +516,7 @@ class NerfactoModel(Model):
             valid_mask = torch.ones_like(fg_mask, dtype=torch.bool)
 
         sam_mean_rad = sam_map[valid_mask].mean().item()
-        sam_mean_deg = sam_mean_rad * 180.0 / np.pi
+        # sam_mean_deg = sam_mean_rad * 180.0 / np.pi
 
         spec_diff = gt_spec - pred_spec                # [H, W, N]
         spec_mse = (spec_diff ** 2).mean(dim=-1)       # [H, W]
@@ -631,7 +631,7 @@ class NerfactoModel(Model):
 
         # masked PSNR for RGB (assumes values in [0,1])
         diff2_rgb = (pr_rgb_for_metrics - gt_rgb_for_metrics) ** 2  # [1,3,h,w]
-        mse_rgb = (diff2_rgb[0] * mask_2d_f[None, :, :]).sum() / (mask_sum * 3.0)
+        # mse_rgb = (diff2_rgb[0] * mask_2d_f[None, :, :]).sum() / (mask_sum * 3.0)
         # psnr_rgb = 10.0 * torch.log10(1.0 / (mse_rgb + eps))
 
         # masked SSIM for RGB: SSIM-map averaged over mask
