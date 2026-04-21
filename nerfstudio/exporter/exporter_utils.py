@@ -37,6 +37,9 @@ from nerfstudio.data.scene_box import OrientedBox
 from nerfstudio.pipelines.base_pipeline import Pipeline, VanillaPipeline
 from nerfstudio.utils.rich_utils import CONSOLE, ItersPerSecColumn
 
+from typing import List, Tuple
+import open3d as o3d
+
 if TYPE_CHECKING:
     # Importing open3d can take ~1 second, so only do it below if we actually
     # need it.
@@ -180,8 +183,6 @@ def generate_point_cloud(
     points = torch.cat(points, dim=0)
     rgbs = torch.cat(rgbs, dim=0)
     view_directions = torch.cat(view_directions, dim=0).cpu()
-
-    import open3d as o3d
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points.double().cpu().numpy())
@@ -442,11 +443,7 @@ def generate_hsi_point_cloud(
 
     return points, bands
 
-
 ####----------------------------HSI PCD GENERATOR------------------###
-from typing import List, Tuple
-
-
 def generate_hsi_point_cloud(
     pipeline: Pipeline,
     num_points: int = 1000000,
