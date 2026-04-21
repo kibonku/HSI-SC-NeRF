@@ -37,8 +37,8 @@ from nerfstudio.data.scene_box import OrientedBox
 from nerfstudio.pipelines.base_pipeline import Pipeline, VanillaPipeline
 from nerfstudio.utils.rich_utils import CONSOLE, ItersPerSecColumn
 
-from typing import List, Tuple
-import open3d as o3d
+# from typing import List, Tuple
+# import open3d as o3d
 
 if TYPE_CHECKING:
     # Importing open3d can take ~1 second, so only do it below if we actually
