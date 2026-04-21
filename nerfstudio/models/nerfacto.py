@@ -630,7 +630,7 @@ class NerfactoModel(Model):
         pr_rgb_for_metrics = torch.moveaxis(pr_crop, -1, 0)[None, ...]  # [1, 3, h, w]
 
         # masked PSNR for RGB (assumes values in [0,1])
-        diff2_rgb = (pr_rgb_for_metrics - gt_rgb_for_metrics) ** 2  # [1,3,h,w]
+        # diff2_rgb = (pr_rgb_for_metrics - gt_rgb_for_metrics) ** 2  # [1,3,h,w]
         # mse_rgb = (diff2_rgb[0] * mask_2d_f[None, :, :]).sum() / (mask_sum * 3.0)
         # psnr_rgb = 10.0 * torch.log10(1.0 / (mse_rgb + eps))
 
