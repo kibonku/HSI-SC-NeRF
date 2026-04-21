@@ -1,6 +1,10 @@
 # HSI-SC-NeRF
 
-Codebase for **HSI-SC-NeRF**, a stationary-camera-based hyperspectral NeRF framework for 3D plant phenotyping and postharvest agricultural inspection.
+## Overview
+
+HSI-SC-NeRF is a stationary-camera-based hyperspectral NeRF framework for 3D plant phenotyping and postharvest agricultural inspection. It extends our earlier **SC-NeRF** framework for stationary-camera point cloud reconstruction, introduced in our CVPR 2025 Workshop paper, “[SC-NeRF: NeRF-based Point Cloud Reconstruction using a Stationary Camera for Agricultural Applications](https://openaccess.thecvf.com/content/CVPR2025W/V4A/html/Ku_SC-NeRF_NeRF-based_Point_Cloud_Reconstruction_using_a_Stationary_Camera_for_CVPRW_2025_paper.html).” 
+
+Built on top of [Nerfstudio](https://github.com/nerfstudio-project/nerfstudio), HSI-SC-NeRF extends that stationary-camera formulation to hyperspectral 3D reconstruction within a modular and scalable framework for training, rendering, and exporting neural radiance field models. Unlike conventional NeRF pipelines that require camera motion around a static object, this framework uses a fixed camera and a rotating object, enabling a simpler and more practical acquisition setup under controlled imaging conditions.
 
 <p align="center">
   <img src="graphfical_abstract.jpg" width="">
