@@ -354,94 +354,94 @@ def collect_camera_poses(pipeline: VanillaPipeline) -> Tuple[List[Dict[str, Any]
 
     return train_frames, eval_frames
 
-def generate_hsi_point_cloud(
-    pipeline: Pipeline,
-    num_points: int = 1000000,
-    hsi_output_name: str = "rgb",      
-    depth_output_name: str = "depth",
-    crop_obb: Optional[OrientedBox] = None,
-    opacity_thresh: float = 0.5,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Export hyperspectral point clouds (x,y,z + C-band HSI) from a trained nerf.
+# def generate_hsi_point_cloud(
+#     pipeline: Pipeline,
+#     num_points: int = 1000000,
+#     hsi_output_name: str = "rgb",      
+#     depth_output_name: str = "depth",
+#     crop_obb: Optional[OrientedBox] = None,
+#     opacity_thresh: float = 0.5,
+# ) -> Tuple[torch.Tensor, torch.Tensor]:
+#     """Export hyperspectral point clouds (x,y,z + C-band HSI) from a trained nerf.
 
-    Returns:
-        points: [N, 3]  (x,y,z)
-        bands:  [N, C]  (channel-wise HSI values)
-    """
+#     Returns:
+#         points: [N, 3]  (x,y,z)
+#         bands:  [N, C]  (channel-wise HSI values)
+#     """
 
-    points_list: List[torch.Tensor] = []
-    bands_list: List[torch.Tensor] = []
+#     points_list: List[torch.Tensor] = []
+#     bands_list: List[torch.Tensor] = []
 
-    progress = Progress(
-        TextColumn(":rainbow: Computing HSI Point Cloud :rainbow:"),
-        BarColumn(),
-        TaskProgressColumn(show_speed=True),
-        TimeRemainingColumn(elapsed_when_finished=True, compact=True),
-        console=CONSOLE,
-    )
+#     progress = Progress(
+#         TextColumn(":rainbow: Computing HSI Point Cloud :rainbow:"),
+#         BarColumn(),
+#         TaskProgressColumn(show_speed=True),
+#         TimeRemainingColumn(elapsed_when_finished=True, compact=True),
+#         console=CONSOLE,
+#     )
 
-    with progress as progress_bar:
-        task = progress_bar.add_task("Generating HSI Point Cloud", total=num_points)
+#     with progress as progress_bar:
+#         task = progress_bar.add_task("Generating HSI Point Cloud", total=num_points)
 
-        total = 0
-        while total < num_points:
-            with torch.no_grad():
-                ray_bundle, _ = pipeline.datamanager.next_train(0)
-                assert isinstance(ray_bundle, RayBundle)
-                outputs = pipeline.model(ray_bundle)
+#         total = 0
+#         while total < num_points:
+#             with torch.no_grad():
+#                 ray_bundle, _ = pipeline.datamanager.next_train(0)
+#                 assert isinstance(ray_bundle, RayBundle)
+#                 outputs = pipeline.model(ray_bundle)
 
-            if hsi_output_name not in outputs:
-                CONSOLE.rule("Error", style="red")
-                CONSOLE.print(f"Could not find {hsi_output_name} in the model outputs", justify="center")
-                CONSOLE.print(f"Available keys: {list(outputs.keys())}", justify="center")
-                sys.exit(1)
-            if depth_output_name not in outputs:
-                CONSOLE.rule("Error", style="red")
-                CONSOLE.print(f"Could not find {depth_output_name} in the model outputs", justify="center")
-                CONSOLE.print(f"Available keys: {list(outputs.keys())}", justify="center")
-                sys.exit(1)
+#             if hsi_output_name not in outputs:
+#                 CONSOLE.rule("Error", style="red")
+#                 CONSOLE.print(f"Could not find {hsi_output_name} in the model outputs", justify="center")
+#                 CONSOLE.print(f"Available keys: {list(outputs.keys())}", justify="center")
+#                 sys.exit(1)
+#             if depth_output_name not in outputs:
+#                 CONSOLE.rule("Error", style="red")
+#                 CONSOLE.print(f"Could not find {depth_output_name} in the model outputs", justify="center")
+#                 CONSOLE.print(f"Available keys: {list(outputs.keys())}", justify="center")
+#                 sys.exit(1)
 
-            hsi = outputs[hsi_output_name]        # [R, C] (Assumed to be the C-band HSI output)
-            depth = outputs[depth_output_name]    # [R, 1] or [R]
+#             hsi = outputs[hsi_output_name]        # [R, C] (Assumed to be the C-band HSI output)
+#             depth = outputs[depth_output_name]    # [R, 1] or [R]
 
-            # Filter points based on opacity if available
-            if "accumulation" in outputs:
-                opacity = outputs["accumulation"].squeeze(-1)
-                mask = opacity > opacity_thresh
-            else:
-                # If no opacity information is available, use all points (or you could choose to skip these points instead by using mask = torch.zeros_like(depth[..., 0], dtype=torch.bool))
-                mask = torch.ones_like(depth[..., 0], dtype=torch.bool)
+#             # Filter points based on opacity if available
+#             if "accumulation" in outputs:
+#                 opacity = outputs["accumulation"].squeeze(-1)
+#                 mask = opacity > opacity_thresh
+#             else:
+#                 # If no opacity information is available, use all points (or you could choose to skip these points instead by using mask = torch.zeros_like(depth[..., 0], dtype=torch.bool))
+#                 mask = torch.ones_like(depth[..., 0], dtype=torch.bool)
 
-            depth = depth[mask]                   # [M, 1]
-            hsi = hsi[mask]                       # [M, C]
-            rb = ray_bundle
-            origins = rb.origins[mask]            # [M, 3]
-            dirs = rb.directions[mask]            # [M, 3]
+#             depth = depth[mask]                   # [M, 1]
+#             hsi = hsi[mask]                       # [M, C]
+#             rb = ray_bundle
+#             origins = rb.origins[mask]            # [M, 3]
+#             dirs = rb.directions[mask]            # [M, 3]
 
-            pts = origins + dirs * depth          # [M, 3]
+#             pts = origins + dirs * depth          # [M, 3]
 
-            if crop_obb is not None:
-                in_box = crop_obb.within(pts)
-                pts = pts[in_box]
-                hsi = hsi[in_box]
+#             if crop_obb is not None:
+#                 in_box = crop_obb.within(pts)
+#                 pts = pts[in_box]
+#                 hsi = hsi[in_box]
 
-            points_list.append(pts)
-            bands_list.append(hsi)
+#             points_list.append(pts)
+#             bands_list.append(hsi)
 
-            total += pts.shape[0]
-            progress_bar.advance(task, pts.shape[0])
+#             total += pts.shape[0]
+#             progress_bar.advance(task, pts.shape[0])
 
-            if pts.shape[0] == 0:
-                # Safe-guard to avoid infinite loop if no points are being collected (e.g., due to too high opacity threshold or aggressive cropping)
-                break
+#             if pts.shape[0] == 0:
+#                 # Safe-guard to avoid infinite loop if no points are being collected (e.g., due to too high opacity threshold or aggressive cropping)
+#                 break
 
-    if len(points_list) == 0:
-        raise RuntimeError("No points collected for HSI point cloud.")
+#     if len(points_list) == 0:
+#         raise RuntimeError("No points collected for HSI point cloud.")
 
-    points = torch.cat(points_list, dim=0)
-    bands = torch.cat(bands_list, dim=0)
+#     points = torch.cat(points_list, dim=0)
+#     bands = torch.cat(bands_list, dim=0)
 
-    return points, bands
+#     return points, bands
 
 ####----------------------------HSI PCD GENERATOR------------------###
 def generate_hsi_point_cloud(
